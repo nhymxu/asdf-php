@@ -8,4 +8,20 @@ plugin_dir=$(dirname "$(dirname "$current_script_path")")
 # shellcheck source=./lib/utils.bash
 source "${plugin_dir}/lib/utils.bash"
 
+download_html() {
+	curl --silent -L https://dl.static-php.dev/static-php-cli/bulk/
+}
+
+list_all_versions() {
+	urls=`download_html | sed -e "s/ /\n/g" | grep -E "(href=|action=)" | grep -oh "'[^']*'" | sed -e 's/"//g' | sed -e "s/'//g"`  #  | grep "\."
+
+	all_version_array=()
+	for line in $urls; do
+		all_version_array+=(`echo $line | grep -oE '[0-9]{1,}.[0-9]{1,}.[0-9]{1,}'`)
+	done
+
+	echo "${all_version_array[@]}" | tr ' ' '\n' | sort -u
+}
+
 check_support_platform
+list_all_versions
