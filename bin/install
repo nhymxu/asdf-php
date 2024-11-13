@@ -38,7 +38,7 @@ install_php() {
   local configure_options="$(construct_configure_options $install_path)"
   local make_flags="-j$ASDF_CONCURRENCY"
 
-  echo "Downloading source code..."
+  echo "Downloading binary..."
   download_binary $install_type $version $source_path
 
   # Running this in a subshell because we don't to disturb the current
@@ -86,6 +86,7 @@ get_download_url() {
   local version=$2
 
   echo "https://github.com/php/php-src/archive/php-${version}.tar.gz"
+	echo "https://dl.static-php.dev/static-php-cli/bulk/php-${version}-fpm-macos-aarch64.tar.gz"
 }
 
 download_binary() {
