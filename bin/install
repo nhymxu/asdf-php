@@ -2,10 +2,13 @@
 
 # TODO:
 # - detect OS: linux/macos if not -> error
-# - detect architecture: intel/arm
+# - detect architecture: intel/arm - aarch64 / x86_64
 # - get arg version
 # - build link point to https://dl.static-php.dev/static-php-cli/bulk/
-#   sample https://dl.static-php.dev/static-php-cli/bulk/php-8.1.30-fpm-macos-aarch64.tar.gz
+#   sample
+# 		https://dl.static-php.dev/static-php-cli/bulk/php-8.0.30-cli-macos-aarch64.tar.gz
+#			https://dl.static-php.dev/static-php-cli/bulk/php-8.0.30-fpm-macos-aarch64.tar.gz
+#			https://dl.static-php.dev/static-php-cli/bulk/php-8.0.30-micro-macos-aarch64.tar.gz
 # - download
 # - extract
 
@@ -35,35 +38,28 @@ install_php() {
 
   echo "Determining configuration options..."
   local source_path=$(get_download_file_path $install_type $version $tmp_download_dir)
-  local configure_options="$(construct_configure_options $install_path)"
   local make_flags="-j$ASDF_CONCURRENCY"
 
-  echo "Downloading binary..."
+	echo "install_type=$install_type"
+	echo "version=$version"
+	echo "install_path=$install_path"
+	echo "tmp_download_dir=$tmp_download_dir"
+	echo "source_path=$source_path"
+	echo "make_flags=$make_flags"
+
+  echo "Downloading CLI binary..."
   download_binary $install_type $version $source_path
 
-  # Running this in a subshell because we don't to disturb the current
-  # working directory.
-  (
-    echo "Extracting source code..."
-    cd $(dirname $source_path)
-    tar -zxf $source_path || exit 1
+	echo "Downloading FPM binary..."
+  download_binary $install_type $version $source_path
 
-    cd $(untar_path $install_type $version $tmp_download_dir)
+	echo "Extracting CLI binary..."
+	cd $(dirname $source_path)
+	tar -zxf $source_path || exit 1
 
-    # Target is OS-specific
-    # target=$(get_target)
+	cd $(untar_path $install_type $version $tmp_download_dir)
 
-    # Build PHP
-    echo "Running buildconfig..."
-    ./buildconf --force || exit 1
-    echo "Running ./configure $configure_options"
-    ./configure $configure_options || exit 1
-    echo "Running make \"$make_flags\""
-    make "$make_flags" || exit 1
-    echo "Running make install..."
-    # make "$make_flags" test || exit 1
-    make "$make_flags" install || exit 1
-  )
+	exit 125
 
   # it's not obvious where php.ini should be placed, let us make it easy for the user
   mkdir -p $install_path/conf.d/
@@ -82,28 +78,38 @@ install_composer() {
 
 # -------------------
 get_download_url() {
-  local install_type=$1
-  local version=$2
+  local version=$1
+  local os=$2
+	local arch=$3
 
-  echo "https://github.com/php/php-src/archive/php-${version}.tar.gz"
-	echo "https://dl.static-php.dev/static-php-cli/bulk/php-${version}-fpm-macos-aarch64.tar.gz"
+	echo "https://dl.static-php.dev/static-php-cli/bulk/php-${version}-fpm-${os}-${arch}.tar.gz"
 }
 
 download_binary() {
   local operating_system=$(uname -a)
+	local architecture=$(uname -m)
+
+	local os=""
+	# normalize version
+	if [[ $architecture == "arm64" ]]; then
+		architecture="aarch64"
+	fi
 
   if [[ $operating_system =~ "Darwin" ]]; then
-    # build path macos
+		echo "build macos here"
+		os="macos"
+		if
   fi
 
   if [[ $operating_system =~ "Linux" ]]; then
-    # build path linux
+		echo "build linux here"
+		os="linux"
   fi
 
   local install_type=$1
   local version=$2
   local download_path=$3
-  local download_url=$(get_download_url $install_type $version)
+  local download_url=$(get_download_url $version $os $architecture)
 
   # curl -Lo $download_path -C - $download_url
   curl -Lo $download_path $download_url
@@ -111,89 +117,13 @@ download_binary() {
 
 
 # -----------------------------------------------
-construct_configure_options() {
-  local install_path=$1
+get_download_file_path() {
+  local install_type=$1
+  local version=$2
+  local tmp_download_dir=$3
+  local pkg_name="php-${version}.tar.gz"
 
-  # many options included below are not applicable to newer PHP versions
-  # including these will trigger a build warning, but will not b
-  global_config="--prefix=$install_path \
-    --enable-bcmath \
-    --enable-calendar \
-    --enable-dba \
-    --enable-exif \
-    --enable-fpm \
-    --enable-ftp \
-    --enable-gd \
-    --enable-gd-native-ttf \
-    --enable-intl \
-    --enable-mbregex \
-    --enable-mbstring \
-    --enable-mysqlnd \
-    --enable-pcntl \
-    --enable-shmop \
-    --enable-soap \
-    --enable-sockets \
-    --enable-sysvmsg \
-    --enable-sysvsem \
-    --enable-sysvshm \
-    --enable-wddx \
-    --enable-zip \
-    --sysconfdir=$install_path \
-    --with-config-file-path=$install_path \
-    --with-config-file-scan-dir=$install_path/conf.d \
-    --with-curl \
-    --with-external-gd \
-    --with-fpm-group=www-data \
-    --with-fpm-user=www-data \
-    --with-gd \
-    --with-mhash \
-    --with-mysql=mysqlnd \
-    --with-mysqli=mysqlnd \
-    --with-pdo-mysql=mysqlnd \
-    --with-xmlrpc \
-    --with-zip \
-    --with-zlib \
-    --without-snmp"
-
-  if [ "$PHP_CONFIGURE_OPTIONS" = "" ]; then
-    local configure_options="$(os_based_configure_options) $global_config"
-  else
-    local configure_options="$PHP_CONFIGURE_OPTIONS $global_config"
-  fi
-
-  if [ "${PHP_WITHOUT_PEAR:-no}" != "no" ]; then
-    configure_options="$configure_options --without-pear"
-  else
-    configure_options="$configure_options --with-pear"
-  fi
-
-  if [ "${PHP_WITHOUT_PDO_PGSQL:-no}" != "no" ]; then
-    configure_options="$configure_options"
-  else
-    local operating_system=$(uname -a)
-
-    if [[ $operating_system =~ "Darwin" ]]; then
-      exit_if_homebrew_not_installed
-
-      local libpq_path=$(homebrew_package_path libpq)
-
-      if [ -n "$libpq_path" ]; then
-        configure_options="$configure_options --with-pdo-pgsql=$libpq_path"
-      else
-        export ASDF_PKG_MISSING="$ASDF_PKG_MISSING libpq"
-      fi
-    else
-      configure_options="$configure_options --with-pdo-pgsql"
-    fi
-  fi
-
-  if [ "${PHP_WITHOUT_PCRE_JIT:-no}" != "no" ]; then
-    configure_options="$configure_options"
-  else
-    configure_options="$configure_options --without-pcre-jit"
-  fi
-
-  echo "$configure_options"
+  echo "$tmp_download_dir/$pkg_name"
 }
 
 homebrew_package_path() {
@@ -363,15 +293,7 @@ os_based_configure_options() {
 }
 
 
-get_download_file_path() {
-  local install_type=$1
-  local version=$2
-  local tmp_download_dir=$3
-  local php_version=$(get_php_version $version)
-  local pkg_name="php-${php_version}.tar.gz"
 
-  echo "$tmp_download_dir/$pkg_name"
-}
 
 untar_path() {
   local install_type=$1
@@ -385,15 +307,5 @@ untar_path() {
   echo "$tmp_download_dir/$dir_name"
 }
 
-c() {
-  IFS='-' read -a version_info <<<"$1"
-
-  if [ "${#version_info[@]}" -eq 1 ]; then
-    echo "${version_info[0]}"
-  else
-    echo "${version_info[0]}-${version_info[1]}"
-  fi
-}
-
 install_php "$ASDF_INSTALL_TYPE" "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
-install_composer "$ASDF_INSTALL_PATH"
+# install_composer "$ASDF_INSTALL_PATH"
